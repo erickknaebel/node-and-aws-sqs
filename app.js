@@ -2,19 +2,18 @@
 var express  = require('express');
 var app      = express();
 var aws      = require('aws-sdk');
-const { runInNewContext } = require('vm');
+var bodyParser = require('body-parser');
+var jsonParser = bodyParser.json()
+var sqs = new aws.SQS();
 var queueUrl = "";
 var receipt  = "";
-    
-// Load your AWS credentials and try to instantiate the object.
+  
+const { runInNewContext } = require('vm');
+
 aws.config.loadFromPath(__dirname + '/config.json');
 
-// Instantiate SQS.
-var sqs = new aws.SQS();
-
-// Creating a queue.
-app.post('/create-queue', function (req, res) {
-    var params = {
+app.post('/create-queue', jsonParser, function(req, res) {
+    params = {
         QueueName: req.body.name
     };
     
@@ -23,13 +22,12 @@ app.post('/create-queue', function (req, res) {
             res.send(err);
         } 
         else {
-            queueUrl = res.body.QueueUrl;
+            queueUrl = data.QueueUrl;
             res.send(data);
         } 
     });
 });
 
-// Listing our queues.
 app.get('/list-all-queues', function (req, res) {
     sqs.listQueues(function(err, data) {
         if(err) {
@@ -41,12 +39,9 @@ app.get('/list-all-queues', function (req, res) {
     });
 });
 
-// Sending a message.
-// NOTE: Here we need to populate the queue url you want to send to.
-// That variable is indicated at the top of app.js.
-app.post('/send-message', function (req, res) {
+app.post('/send-message', jsonParser, function (req, res) {
     var params = {
-        MessageBody: req.body,
+        MessageBody: req.body.message,
         QueueUrl: queueUrl,
         DelaySeconds: 0
     };
@@ -78,16 +73,15 @@ app.get('/receive-message', function (req, res) {
             res.send(err);
         } 
         else {
-            receipt = res.body.Messages[0].ReceiptHandle
+            receipt = data.Messages[0].ReceiptHandle
             res.send(data);
         } 
     });
 });
 
-// Deleting a message.
-app.get('/delete-queue', function (req, res) {
+app.get('/delete-queue', jsonParser, function (req, res) {
     var params = {
-        QueueUrl: queueUrl,
+        QueueUrl: req.body.queueUrl,
         ReceiptHandle: receipt
     };
     
@@ -101,10 +95,10 @@ app.get('/delete-queue', function (req, res) {
     });
 });
 
-// Purging the entire queue.
-app.get('/purge-queue', function (req, res) {
+
+app.get('/purge-queue', jsonParser, function (req, res) {
     var params = {
-        QueueUrl: queueUrl
+        QueueUrl: req.body.queueUrl
     };
     
     sqs.purgeQueue(params, function(err, data) {
@@ -117,7 +111,6 @@ app.get('/purge-queue', function (req, res) {
     });
 });
 
-// Start server.
 var server = app.listen(80, function () {
     var host = server.address().address;
     var port = server.address().port;
